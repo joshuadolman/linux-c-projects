@@ -65,7 +65,7 @@ int main(void)
 	getmaxyx(stdscr, termMaxY, termMaxX);
 	
 	//ncurses windows
-	i32 lineNumberWidth = 2;
+	i32 lineNumberWidth = 3;
 	i32 marginWidth = 1;
 	WINDOW* win_lineNumbers = newwin(termMaxY,lineNumberWidth,0,0);
 	WINDOW* win_textBuffer = newwin(termMaxY,termMaxX-lineNumberWidth,0,lineNumberWidth+marginWidth);
