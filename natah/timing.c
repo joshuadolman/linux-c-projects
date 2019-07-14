@@ -32,7 +32,4 @@ f64 GetTimingMS() {
 
 
 
-
-
-
 #endif //TIMING_C

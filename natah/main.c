@@ -1,10 +1,10 @@
 #include <stdlib.h>
-
-#include "../_shared/joshua.h"
-
-#include <ncurses.h>
 #include <string.h>
 
+#include <ncurses.h>
+#include <utf8proc.h>
+
+#include "../_shared/joshua.h"
 #include "colors.c"
 #include "timing.c"
 
@@ -13,9 +13,9 @@
 global_variable b32 Running = true;
 
 typedef struct Memory {
-	void* pointer;
 	u64 TotalSize;
 	u64 UsedSize;
+	void* pointer;
 } Memory;
 
 void PrintLineNumbers(WINDOW* window) {
@@ -26,22 +26,28 @@ void PrintLineNumbers(WINDOW* window) {
 	} else if (windowWidth > 9) {
 		windowWidth = 9;
 	}
-	wattron(window, COLOR_PAIR(BLACK_YELLOW));
+	wattron(window, COLOR_PAIR(LINE_NUMBERS));
+	wattron(window, A_REVERSE);
 	for (i32 i = 0; i < windowHeight; i++) {
 		mvwprintw(window, i, 0, "%*.*i", windowWidth, windowWidth, i+1);
 	}
-	wattroff(window, COLOR_PAIR(BLACK_YELLOW));
+	wattroff(window, COLOR_PAIR(LINE_NUMBERS));
+	wattroff(window, A_REVERSE);
 }
 
 void PrintTextBuffer(WINDOW* window, Memory buffer) {
-	i32 windowWidth, windowHeight;
+	i32 windowWidth, windowHeight, lineCounter = 0;
 	getmaxyx(window, windowHeight, windowWidth);
-	wattron(window, COLOR_PAIR(BLUE_BLACK));
+	wattron(window, COLOR_PAIR(BLACK_WHITE));
 	wmove(window,0,0);
 	for (i32 i = 0; i < buffer.TotalSize; i++) {
+		//if (*((u8*)(buffer.pointer + i)) == '\n') {
+		//	lineCounter++;
+		//	if (lineCounter > windowHeight) { break; }
+		//}
 		wprintw(window, "%c", *((u8*)(buffer.pointer + i)));
 	}
-	wattroff(window, COLOR_PAIR(BLUE_BLACK));
+	wattroff(window, COLOR_PAIR(BLACK_WHITE));
 }
 
 void KillOurself(u8* str) {
@@ -51,11 +57,48 @@ void KillOurself(u8* str) {
 	exit(1);
 }
 
+//returns line count for now -joshua 2019/07/14
+i32 ReadFileIntoBuffer(u8* fileName, Memory* buffer) {
+	i32 fileSize;
+	FILE* file = fopen(fileName, "r");
+	if (file) {
+		fseek(file,0,SEEK_END);
+		fileSize = ftell(file);
+		fseek(file,0,SEEK_SET);
+	} else {
+		KillOurself("Could not open file!");
+	}
+
+	i32 lineCount = 0;
+	for (int i = 0; i < fileSize; i++) {
+		if (!fseek(file,i,SEEK_SET)) {
+			if (fgetc(file)=='\n') {
+				lineCount++;
+			}
+		} else {
+			KillOurself("fseek failed!");
+		}
+	}
+
+	fseek(file,0,SEEK_SET);
+
+	buffer->TotalSize = fileSize*2;
+	buffer->UsedSize = fileSize;
+	buffer->pointer = malloc(buffer->TotalSize);
+	i32 elementsRead = fread(buffer->pointer, 1, buffer->TotalSize, file);
+
+	fclose(file);
+	return lineCount;
+}
+
+
 int main(int argc, char** argv)
 {   
 	initscr();
 	noecho();
 	cbreak();
+	//scrollok(stdscr, FALSE);
+	use_default_colors();
 	
 	if (has_colors()==false) {
 		KillOurself("Your terminal does not support color!");
@@ -63,6 +106,10 @@ int main(int argc, char** argv)
 		InitialiseColors();
 	}
 	
+	if (argc!=2) {
+		KillOurself("natah requires exactly 1 argument which is the name of a text file");
+	}
+
 	i32 termMaxX, termMaxY;
 	getmaxyx(stdscr, termMaxY, termMaxX);
 	
@@ -72,8 +119,12 @@ int main(int argc, char** argv)
 	WINDOW* win_lineNumbers = newwin(termMaxY,lineNumberWidth,0,0);
 	WINDOW* win_textBuffer = newwin(termMaxY,termMaxX-lineNumberWidth,0,lineNumberWidth+marginWidth);
 	
-	i32 fileSize;
-	FILE* file = fopen("test.txt", "r");
+	
+	Memory buffer = {0};
+	i32 lineCount = ReadFileIntoBuffer(argv[argc-1], &buffer);
+
+	/*i32 fileSize = 0;
+	FILE* file = fopen(argv[argc-1], "r");
 	if (file) {
 		fseek(file,0,SEEK_END);
 		fileSize = ftell(file);
@@ -81,13 +132,29 @@ int main(int argc, char** argv)
 	} else {
 		KillOurself("Could not open file!");
 	}
-	Memory buffer = {0};
+
+	i32 lineCount = 0;
+	for (int i = 0; i < fileSize; i++) {
+		if (!fseek(file,i,SEEK_SET)) {
+			if (fgetc(file)=='\n') {
+				lineCount++;
+			}
+		} else {
+			KillOurself("fseek failed!");
+		}
+	}
+	
+	fseek(file,0,SEEK_SET);
+
+	
 	buffer.TotalSize = fileSize*2;
 	buffer.UsedSize = fileSize;
 	buffer.pointer = malloc(buffer.TotalSize);
 	i32 elementsRead = fread(buffer.pointer, 1, buffer.TotalSize, file);
 
-	//memset(buffer.pointer,0,buffer.TotalSize);
+	//fclose(file);
+	*/
+	//
 
 	i32 input;
 
@@ -101,12 +168,13 @@ int main(int argc, char** argv)
 		beginTime = GetTimingMS();
 		getmaxyx(stdscr, termMaxY, termMaxX);
 		
+		wresize(win_lineNumbers, termMaxY, lineNumberWidth);
+		wresize(win_textBuffer, termMaxY, termMaxX-lineNumberWidth-marginWidth);
+
 		erase();
 		
 		PrintLineNumbers(win_lineNumbers);
 		PrintTextBuffer(win_textBuffer, buffer);
-		//refresh();
-		//box(win_lineNumbers,0,0);
 		wnoutrefresh(stdscr);
 		wnoutrefresh(win_lineNumbers);
 		wnoutrefresh(win_textBuffer);
@@ -120,6 +188,8 @@ int main(int argc, char** argv)
 		input = getch();
 		if (input=='q') {
 			Running=false;
+		} else if (input=='w') {
+			ReadFileIntoBuffer("test2.txt", &buffer);
 		} else {
 			
 		}
