@@ -1,4 +1,3 @@
-//#include <stdio.h>
 #include <stdlib.h>
 
 #include "../_shared/joshua.h"
@@ -8,7 +7,6 @@
 
 #include "colors.c"
 #include "timing.c"
-//#include <unistd.h>
 
 #define DESIRED_FRAME_RATE 10
 
@@ -46,17 +44,21 @@ void PrintTextBuffer(WINDOW* window, Memory buffer) {
 	wattroff(window, COLOR_PAIR(BLUE_BLACK));
 }
 
-//#include <math.h>
-int main(void)
+void KillOurself(u8* str) {
+	endwin();
+	printf(str);
+	printf("\n");
+	exit(1);
+}
+
+int main(int argc, char** argv)
 {   
 	initscr();
 	noecho();
 	cbreak();
 	
 	if (has_colors()==false) {
-		endwin();
-		printf("Your terminal does not support color\n");
-		exit(1);
+		KillOurself("Your terminal does not support color!");
 	} else {
 		InitialiseColors();
 	}
@@ -70,14 +72,20 @@ int main(void)
 	WINDOW* win_lineNumbers = newwin(termMaxY,lineNumberWidth,0,0);
 	WINDOW* win_textBuffer = newwin(termMaxY,termMaxX-lineNumberWidth,0,lineNumberWidth+marginWidth);
 	
-	Memory buffer = {0};
-	buffer.TotalSize = 50;
-	buffer.pointer = malloc(buffer.TotalSize);
-
+	i32 fileSize;
 	FILE* file = fopen("test.txt", "r");
-
-	i32 count = 10;
-	i32 elementsRead = fread(buffer.pointer, 1, count, file);
+	if (file) {
+		fseek(file,0,SEEK_END);
+		fileSize = ftell(file);
+		fseek(file,0,SEEK_SET);
+	} else {
+		KillOurself("Could not open file!");
+	}
+	Memory buffer = {0};
+	buffer.TotalSize = fileSize*2;
+	buffer.UsedSize = fileSize;
+	buffer.pointer = malloc(buffer.TotalSize);
+	i32 elementsRead = fread(buffer.pointer, 1, buffer.TotalSize, file);
 
 	//memset(buffer.pointer,0,buffer.TotalSize);
 
@@ -94,8 +102,6 @@ int main(void)
 		getmaxyx(stdscr, termMaxY, termMaxX);
 		
 		erase();
-		
-		
 		
 		PrintLineNumbers(win_lineNumbers);
 		PrintTextBuffer(win_textBuffer, buffer);
@@ -117,8 +123,6 @@ int main(void)
 		} else {
 			
 		}
-
-		
 	}
 	
 	endwin();
